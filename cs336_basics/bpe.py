@@ -103,7 +103,8 @@ def pretokenize_worker(args):
     path, start, end, special_tokens = args
     counts = Counter()
 
-    split_pattern = b"|".join([re.escape(t.encode('utf-8')) for t in special_tokens])
+    sorted_special = sorted(special_tokens, key=len, reverse=True)
+    split_pattern = b"|".join([re.escape(t.encode('utf-8')) for t in sorted_special])
     PAT = rb"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     with open(path, 'rb') as f:
         f.seek(start)
