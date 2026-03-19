@@ -3,9 +3,9 @@ from typing import BinaryIO
 
 
 def find_chunk_boundaries(
-    file: BinaryIO,
-    desired_num_chunks: int,
-    split_special_token: bytes,
+        file: BinaryIO,
+        desired_num_chunks: int,
+        split_special_token: bytes,
 ) -> list[int]:
     """
     Chunk the file into parts that can be counted independently.
