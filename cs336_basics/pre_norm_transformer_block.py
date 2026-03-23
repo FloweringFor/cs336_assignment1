@@ -54,3 +54,52 @@ class SwiGLU(nn.Module):
         w3x = self.w3(x)
         return self.w2(w1x * torch.sigmoid(w1x) * w3x)
 
+
+class RoPE(nn.Module):
+    def __init__(
+            self,
+            theta: float,                        # Θ value for the RoPE
+            d_k: int,                            # dimension of query and key vectors
+            max_seq_len: int,                    # Maximum sequence length that will be inputted
+            device: torch.device | None = None   # Device to store the buffer on
+    ):
+        """
+        Construct the RoPE module and create buffers.
+        """
+        super(RoPE, self).__init__()
+        self.theta = theta
+        self.d_k = d_k
+        inv_freq = 1 / theta ** ((torch.arange(0, d_k, 2, device=device)) / d_k)  # d_k // 2
+        t = torch.arange(0, max_seq_len, 1, device=device).float()  # max_seq_len
+        freqs = torch.outer(t, inv_freq)  # (max_seq_len, d_k // 2)
+        emb = freqs.repeat_interleave(2, dim=-1)  # 相邻配对 (max_seq_len, d_k)
+        # emb = torch.cat((freqs, freqs), dim=-1)  # 跨半区配对 (max_seq_len, d_k)
+        self.register_buffer("cos_cached", emb.cos(), persistent=False)
+        self.register_buffer("sin_cached", emb.sin(), persistent=False)
+
+    def _rotate_half(self, x: torch.Tensor):
+        # 跨半区配对
+        # x1 = x[..., :self.d_k // 2]
+        # x2 = x[..., self.d_k // 2:]
+        # return torch.cat((-x2, x1), dim=-1)
+
+        # 相邻配对
+        x_even = x[..., 0::2]  # 偶数位
+        x_odd = x[..., 1::2]  # 奇数位
+        x_rotated = torch.stack((-x_odd, x_even), dim=-1)
+        return x_rotated.flatten(-2)
+
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+        """
+        Process an input tensor of shape (..., seq_len, d_k) and return a tensor of the same shape.
+        Note that you should tolerate x with an arbitrary number of batch dimensions.
+        You should assume that the token positions are a tensor of shape (..., seq_len)
+        specifying the token positions of x along the sequence dimension
+        """
+        # x: (Batch, Heads, Seq_Len, d_k)
+        # token_positions: (Batch, Seq_Len)
+        cos = self.cos_cached[token_positions]  # (Batch, Seq_Len, d_k)
+        sin = self.sin_cached[token_positions]  # (Batch, Seq_Len, d_k)
+        cos = cos.unsqueeze(-3)  # (Batch, 1, Seq_Len, d_k)
+        sin = sin.unsqueeze(-3)  # (Batch, 1, Seq_Len, d_k)
+        return x * cos + self._rotate_half(x) * sin
