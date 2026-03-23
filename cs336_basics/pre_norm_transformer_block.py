@@ -103,3 +103,11 @@ class RoPE(nn.Module):
         cos = cos.unsqueeze(-3)  # (Batch, 1, Seq_Len, d_k)
         sin = sin.unsqueeze(-3)  # (Batch, 1, Seq_Len, d_k)
         return x * cos + self._rotate_half(x) * sin
+
+
+def softmax(x: torch.Tensor, dim: int):
+    max_val = torch.max(x, dim=dim, keepdim=True)[0]  # torch.max 会返回两个值：最大值、最大值所在的索引
+    stable_x = x - max_val
+    exp_x = torch.exp(stable_x)
+    sum_exp = torch.sum(exp_x, dim=dim, keepdim=True)
+    return exp_x / sum_exp
