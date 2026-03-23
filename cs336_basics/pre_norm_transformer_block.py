@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import cs336_basics.basic_building_blocks as basic_building_blocks
@@ -58,10 +60,10 @@ class SwiGLU(nn.Module):
 class RoPE(nn.Module):
     def __init__(
             self,
-            theta: float,                        # Θ value for the RoPE
-            d_k: int,                            # dimension of query and key vectors
-            max_seq_len: int,                    # Maximum sequence length that will be inputted
-            device: torch.device | None = None   # Device to store the buffer on
+            theta: float,  # Θ value for the RoPE
+            d_k: int,  # dimension of query and key vectors
+            max_seq_len: int,  # Maximum sequence length that will be inputted
+            device: torch.device | None = None  # Device to store the buffer on
     ):
         """
         Construct the RoPE module and create buffers.
@@ -90,12 +92,6 @@ class RoPE(nn.Module):
         return x_rotated.flatten(-2)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
-        """
-        Process an input tensor of shape (..., seq_len, d_k) and return a tensor of the same shape.
-        Note that you should tolerate x with an arbitrary number of batch dimensions.
-        You should assume that the token positions are a tensor of shape (..., seq_len)
-        specifying the token positions of x along the sequence dimension
-        """
         # x: (Batch, Heads, Seq_Len, d_k)
         # token_positions: (Batch, Seq_Len)
         cos = self.cos_cached[token_positions]  # (Batch, Seq_Len, d_k)
@@ -105,9 +101,23 @@ class RoPE(nn.Module):
         return x * cos + self._rotate_half(x) * sin
 
 
-def softmax(x: torch.Tensor, dim: int):
+def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
     max_val = torch.max(x, dim=dim, keepdim=True)[0]  # torch.max 会返回两个值：最大值、最大值所在的索引
     stable_x = x - max_val
     exp_x = torch.exp(stable_x)
     sum_exp = torch.sum(exp_x, dim=dim, keepdim=True)
     return exp_x / sum_exp
+
+
+def scaled_dot_product_attention(
+        query: torch.Tensor,  # (batch_size, ..., seq_len, d_k)
+        key: torch.Tensor,  # (batch_size, ..., seq_len, d_k)
+        value: torch.Tensor,  # (batch_size, ..., seq_len, d_v)
+        mask: torch.Tensor | None = None,  # (seq_len, seq_len)
+) -> torch.Tensor:
+    d_k = query.shape[-1]
+    scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+    if mask is not None:
+        scores = scores.masked_fill(mask == False, float('-inf'))
+    scores = softmax(scores, dim=-1)
+    return torch.matmul(scores, value)
