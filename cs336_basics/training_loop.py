@@ -1,3 +1,6 @@
+import os
+import typing
+
 import torch
 import numpy as np
 import numpy.typing as npt
@@ -24,3 +27,31 @@ def data_loading(dataset: npt.NDArray, batch_size: int, context_length: int, dev
             y_batch = torch.stack([data[idx + 1: idx + context_length + 1] for idx in batch_start_steps])
 
             yield x_batch, y_batch
+
+
+def save_checkpoint(
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        iteration: int,
+        out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+):
+    """
+    将模型、优化器状态及迭代次数保存到指定路径或文件对象中。
+    """
+    checkpoint = {
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'iteration': iteration
+    }
+    torch.save(checkpoint, out)
+
+
+def load_checkpoint(
+        src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer
+):
+    checkpoint = torch.load(src)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    return checkpoint['iteration']
