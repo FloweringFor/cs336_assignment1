@@ -206,3 +206,42 @@ class TransformerBlock(nn.Module):
         ffn = self.feed_forward(norm)
         return x + ffn
 
+
+class TransformerLM(nn.Module):
+    def __init__(
+            self,
+            vocab_size: int,  # The size of the vocabulary
+            context_length: int,  # The maximum context length
+            d_model: int,
+            num_layers: int,  # The number of Transformer blocks to use
+            num_heads: int,
+            d_ff: int,
+            rope_theta: float,
+            token_positions: torch.Tensor | None = None
+    ):
+        super(TransformerLM, self).__init__()
+
+        # 1. Token Embedding: (vocab_size, d_model)
+        self.token_embedding = basic_building_blocks.Embedding(vocab_size, d_model)
+
+        # 2. Transformer Blocks: 使用 ModuleList 方便循环传递参数
+        self.transformer_blocks = nn.ModuleList([
+            TransformerBlock(d_model, num_heads, d_ff, context_length, rope_theta)
+            for _ in range(num_layers)])
+
+        # 3. 最后的 Norm
+        self.final_norm = RMSNorm(d_model)
+
+        # 4. Output Embedding
+        self.output_embedding = basic_building_blocks.Linear(d_model, vocab_size)
+
+        self.token_positions = token_positions
+
+    def forward(self, x):
+        x = self.token_embedding(x)
+        for transformer_block in self.transformer_blocks:
+            x = transformer_block(x, self.token_positions)
+        x = self.final_norm(x)
+        output = self.output_embedding(x)
+        # probabilities = softmax(output, dim=-1)
+        return output
