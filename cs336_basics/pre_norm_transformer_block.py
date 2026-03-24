@@ -121,3 +121,88 @@ def scaled_dot_product_attention(
         scores = scores.masked_fill(mask == False, float('-inf'))
     scores = softmax(scores, dim=-1)
     return torch.matmul(scores, value)
+
+
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(
+            self,
+            d_model: int,  # Dimensionality of the Transformer block inputs
+            num_heads: int,  # Number of heads to use in multi-head self-attention
+            max_seq_len: int = 2024,
+            theta: float = 10000.0
+    ):
+        super(MultiHeadSelfAttention, self).__init__()
+        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+
+        # Register buffer
+        self.register_buffer("casual_mask", torch.tril(torch.ones(max_seq_len, max_seq_len)).bool(), persistent=False)
+
+        # ROPE
+        self.rope = RoPE(theta, self.d_k, max_seq_len)
+
+        # Linear layers for Q, K, and V
+        self.W_q = basic_building_blocks.Linear(d_model, d_model)
+        self.W_k = basic_building_blocks.Linear(d_model, d_model)
+        self.W_v = basic_building_blocks.Linear(d_model, d_model)
+
+        # Output projection
+        self.W_o = basic_building_blocks.Linear(d_model, d_model)
+
+    def forward(self, x, token_positions: torch.Tensor | None = None):
+        _, seq_len, d_model = x.shape
+
+        # 1. Linear projections and split into heads
+        # self.W_q(x) (batch_size, seq_len, d_model)
+        # view (batch_size, seq_len, num_heads, d_k)
+        # transpose (batch_size, num_heads, seq_len, d_k)
+        q = self.W_q(x).view(-1, seq_len, self.num_heads, self.d_k).transpose(1, 2)
+        k = self.W_k(x).view(-1, seq_len, self.num_heads, self.d_k).transpose(1, 2)
+        v = self.W_v(x).view(-1, seq_len, self.num_heads, self.d_k).transpose(1, 2)
+
+        # 2. ROPE
+        if token_positions is not None:
+            q = self.rope(q, token_positions)
+            k = self.rope(k, token_positions)
+
+        # 3. Scaled Dot-Product Attention: (batch_size, num_heads, seq_len, seq_len)
+        attn_output = scaled_dot_product_attention(q, k, v, mask=self.casual_mask[:seq_len, :seq_len])
+
+        # 4. Merge output
+        out = attn_output.transpose(1, 2).contiguous().view(-1, seq_len, self.d_model)
+        out = self.W_o(out)
+        return out
+
+
+class TransformerBlock(nn.Module):
+    def __init__(
+            self,
+            d_model: int,  # Dimensionality of the Transformer block inputs
+            num_heads: int,  # Number of heads to use in multi-head self-attention
+            d_ff: int,  # Dimensionality of the position-wise feed-forward inner layer.
+            max_seq_len: int,
+            theta: float,
+    ):
+        super(TransformerBlock, self).__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_ff = d_ff
+        self.attn_norm = RMSNorm(d_model)
+        self.ffn_norm = RMSNorm(d_model)
+        self.multi_head_self_attention = MultiHeadSelfAttention(d_model, num_heads, max_seq_len, theta)
+        self.feed_forward = SwiGLU(d_model, d_ff)
+
+    def forward(self, x, token_positions: torch.Tensor | None = None):
+        # x (batch sequence_length d_model)
+        batch_size, seq_len, d_model = x.shape
+        norm = self.attn_norm(x)
+        if token_positions is None:
+            token_positions = torch.arange(seq_len, device=x.device).unsqueeze(0).expand(batch_size, seq_len)
+        attn = self.multi_head_self_attention(norm, token_positions)
+        x = x + attn
+        norm = self.ffn_norm(x)
+        ffn = self.feed_forward(norm)
+        return x + ffn
+

@@ -150,7 +150,14 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    model = pre_norm_transformer_block.MultiHeadSelfAttention(d_model, num_heads)
+    model.load_state_dict({
+        "W_q.weights": q_proj_weight,
+        "W_k.weights": k_proj_weight,
+        "W_v.weights": v_proj_weight,
+        "W_o.weights": o_proj_weight,
+    })
+    return model(in_features)
 
 
 def run_multihead_self_attention_with_rope(
@@ -190,7 +197,14 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    model = pre_norm_transformer_block.MultiHeadSelfAttention(d_model, num_heads, max_seq_len, theta)
+    model.load_state_dict({
+        "W_q.weights": q_proj_weight,
+        "W_k.weights": k_proj_weight,
+        "W_v.weights": v_proj_weight,
+        "W_o.weights": o_proj_weight,
+    })
+    return model(in_features, token_positions)
 
 
 def run_rope(
@@ -286,7 +300,19 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    model = pre_norm_transformer_block.TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta)
+    model.load_state_dict({
+        "attn_norm.gain": weights['ln1.weight'],
+        "ffn_norm.gain": weights['ln2.weight'],
+        "multi_head_self_attention.W_q.weights": weights['attn.q_proj.weight'],
+        "multi_head_self_attention.W_k.weights": weights['attn.k_proj.weight'],
+        "multi_head_self_attention.W_v.weights": weights['attn.v_proj.weight'],
+        "multi_head_self_attention.W_o.weights": weights['attn.output_proj.weight'],
+        "feed_forward.w1.weights": weights['ffn.w1.weight'],
+        "feed_forward.w2.weights": weights['ffn.w2.weight'],
+        "feed_forward.w3.weights": weights['ffn.w3.weight'],
+    })
+    return model(in_features)
 
 
 def run_transformer_lm(
