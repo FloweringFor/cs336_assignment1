@@ -14,8 +14,8 @@ import cs336_basics.bpe as bpe
 import cs336_basics.tokenizer as tokenizer
 import cs336_basics.basic_building_blocks as basic_building_blocks
 import cs336_basics.pre_norm_transformer_block as pre_norm_transformer_block
-import cs336_basics.train as train
-import cs336_basics.training_loop as training_loop
+import cs336_basics.optim as optim
+import cs336_basics.dataloader as dataloader
 
 
 def run_linear(
@@ -487,7 +487,7 @@ def run_get_batch(
         language modeling labels.
     """
 
-    data_loader = training_loop.data_loading(dataset, batch_size, context_length, device)
+    data_loader = dataloader.data_loading(dataset, batch_size, context_length, device)
     return next(data_loader)
 
 
@@ -522,7 +522,7 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    return train.cross_entropy(inputs, targets)
+    return optim.cross_entropy(inputs, targets)
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
@@ -534,14 +534,14 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    train.gradient_clipping(parameters, max_l2_norm)
+    optim.gradient_clipping(parameters, max_l2_norm)
 
 
 def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    return train.AdamW
+    return optim.AdamW
 
 
 def run_get_lr_cosine_schedule(
@@ -569,7 +569,7 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    return train.learning_rate_schedule(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
+    return optim.learning_rate_schedule(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
 
 
 def run_save_checkpoint(
@@ -588,7 +588,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    training_loop.save_checkpoint(model, optimizer, iteration, out)
+    dataloader.save_checkpoint(model, optimizer, iteration, out)
 
 
 def run_load_checkpoint(
@@ -609,7 +609,7 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    return training_loop.load_checkpoint(src, model, optimizer)
+    return dataloader.load_checkpoint(src, model, optimizer)
 
 
 def get_tokenizer(
