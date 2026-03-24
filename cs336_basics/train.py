@@ -80,3 +80,18 @@ def learning_rate_schedule(t, alpha_max, alpha_min, t_w, t_c):
     else:
         alpha_t = alpha_min
     return alpha_t
+
+
+# 对梯度进行全局裁剪
+def gradient_clipping(parameters, max_l2_norm, eps=1e-6):
+    total_l2_norm = 0
+    for param in parameters:
+        if param.grad is not None:
+            total_l2_norm += (param.grad.data**2).sum()
+    total_l2_norm = math.sqrt(total_l2_norm)
+    if total_l2_norm >= max_l2_norm:
+        for param in parameters:
+            if param.grad is not None:
+                param.grad.data.mul_(max_l2_norm / (total_l2_norm + eps))
+
+
