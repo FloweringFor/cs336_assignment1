@@ -15,6 +15,7 @@ import cs336_basics.tokenizer as tokenizer
 import cs336_basics.basic_building_blocks as basic_building_blocks
 import cs336_basics.pre_norm_transformer_block as pre_norm_transformer_block
 import cs336_basics.train as train
+import cs336_basics.training_loop as training_loop
 
 
 def run_linear(
@@ -485,7 +486,9 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+
+    data_loader = training_loop.data_loading(dataset, batch_size, context_length, device)
+    return next(data_loader)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
