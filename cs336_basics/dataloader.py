@@ -1,5 +1,6 @@
 import os
 import typing
+from typing import Union
 
 import torch
 import numpy as np
@@ -33,7 +34,7 @@ def save_checkpoint(
         model: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         iteration: int,
-        out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+        out: Union[str, os.PathLike, typing.BinaryIO, typing.IO[bytes]]
 ):
     """
     将模型、优化器状态及迭代次数保存到指定路径或文件对象中。
@@ -47,7 +48,7 @@ def save_checkpoint(
 
 
 def load_checkpoint(
-        src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
+        src: Union[str, os.PathLike, typing.BinaryIO, typing.IO[bytes]],
         model: torch.nn.Module,
         optimizer: torch.optim.Optimizer
 ):

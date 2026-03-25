@@ -1,9 +1,10 @@
 import math
+from typing import Optional
 
 import torch
 import torch.nn as nn
 
-import cs336_basics.basic_building_blocks as basic_building_blocks
+import basic_building_blocks
 
 
 class RMSNorm(nn.Module):
@@ -11,8 +12,8 @@ class RMSNorm(nn.Module):
             self,
             d_model: int,  # Hidden dimension of the model
             eps: float = 1e-5,  # Epsilon value for numerical stability
-            device: torch.device | None = None,  # Device to store the parameters on
-            dtype: torch.dtype | None = None  # Data type of the parameters
+            device: Optional[torch.device] = None,  # Device to store the parameters on
+            dtype: Optional[torch.dtype] = None  # Data type of the parameters
     ):
         """
         Construct the RMSNorm module.
@@ -38,8 +39,8 @@ class SwiGLU(nn.Module):
             self,
             d_model: int,
             d_ff: int = None,
-            device: torch.device | None = None,
-            dtype: torch.dtype | None = None
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None
     ):
         super(SwiGLU, self).__init__()
         if d_ff is None:
@@ -64,7 +65,7 @@ class RoPE(nn.Module):
             theta: float,  # Θ value for the RoPE
             d_k: int,  # dimension of query and key vectors
             max_seq_len: int,  # Maximum sequence length that will be inputted
-            device: torch.device | None = None  # Device to store the buffer on
+            device: Optional[torch.device] = None  # Device to store the buffer on
     ):
         """
         Construct the RoPE module and create buffers.
@@ -118,7 +119,7 @@ def scaled_dot_product_attention(
         query: torch.Tensor,  # (batch_size, ..., seq_len, d_k)
         key: torch.Tensor,  # (batch_size, ..., seq_len, d_k)
         value: torch.Tensor,  # (batch_size, ..., seq_len, d_v)
-        mask: torch.Tensor | None = None,  # (seq_len, seq_len)
+        mask: Optional[torch.Tensor] = None,  # (seq_len, seq_len)
 ) -> torch.Tensor:
     d_k = query.shape[-1]
     scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
@@ -156,7 +157,7 @@ class MultiHeadSelfAttention(nn.Module):
         # Output projection
         self.W_o = basic_building_blocks.Linear(d_model, d_model)
 
-    def forward(self, x, token_positions: torch.Tensor | None = None):
+    def forward(self, x, token_positions: Optional[torch.Tensor] = None):
         _, seq_len, d_model = x.shape
 
         # 1. Linear projections and split into heads
@@ -199,7 +200,7 @@ class TransformerBlock(nn.Module):
         self.multi_head_self_attention = MultiHeadSelfAttention(d_model, num_heads, max_seq_len, theta)
         self.feed_forward = SwiGLU(d_model, d_ff)
 
-    def forward(self, x, token_positions: torch.Tensor | None = None):
+    def forward(self, x, token_positions: Optional[torch.Tensor] = None):
         # x (batch sequence_length d_model)
         batch_size, seq_len, d_model = x.shape
         norm = self.attn_norm(x)
@@ -222,7 +223,7 @@ class TransformerLM(nn.Module):
             num_heads: int,
             d_ff: int,
             rope_theta: float,
-            token_positions: torch.Tensor | None = None
+            token_positions: Optional[torch.Tensor] = None
     ):
         super(TransformerLM, self).__init__()
 

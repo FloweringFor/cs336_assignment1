@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="f4531f3d-9b95-4004-b2d4-80f63903da35" name="AutoDL_Assignment1">
+        <fileTransfer accessType="SFTP" host="connect.nmb2.seetacloud.com" port="42268" sshConfigId="7071cfbd-6be6-4a7e-bcac-5173b6076ea5" sshConfig="root@connect.nmb2.seetacloud.com:42268 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

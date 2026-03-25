@@ -1,15 +1,17 @@
+from __future__ import annotations
+
 import os
 import regex as re
 from collections import Counter
 import multiprocessing as mp
-from typing import BinaryIO
+from typing import BinaryIO, List, Tuple, Dict
 
 
 def train_bpe(
         input_path: str,
         vocab_size: int,
-        special_tokens: list[str],
-) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+        special_tokens: List[str],
+) -> Tuple[Dict[int, bytes], List[Tuple[bytes, bytes]]]:
     # 第一阶段：初始化词表（Vocabulary Initialization）
     vocab = initialize_vocab(special_tokens)
 
@@ -88,7 +90,7 @@ def train_bpe(
     return vocab, merge
 
 
-def initialize_vocab(special_tokens: list[str]) -> dict[int, bytes]:
+def initialize_vocab(special_tokens: List[str]) -> Dict[int, bytes]:
     # 1. 基础 256 个字节 (ID: 0-255)
     # 记得使用 bytes([i]) 而不是 bytes(i)
     vocab = {i: bytes([i]) for i in range(256)}
@@ -124,7 +126,7 @@ def find_chunk_boundaries(
         file: BinaryIO,
         desired_num_chunks: int,
         split_special_token: bytes,
-) -> list[int]:
+) -> List[int]:
     """
     Chunk the file into parts that can be counted independently.
     May return fewer chunks if the boundaries end up overlapping.

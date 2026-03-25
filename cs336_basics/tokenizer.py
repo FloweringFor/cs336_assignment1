@@ -1,14 +1,17 @@
+from __future__ import annotations
 from collections.abc import Iterable, Iterator
 import json
+from typing import Optional, List, Dict, Tuple
+
 import regex as re
 
 
 class Tokenizer:
     def __init__(
             self,
-            vocab: dict[int, bytes],
-            merges: list[tuple[bytes, bytes]],
-            special_tokens: list[str] | None = None
+            vocab: Dict[int, bytes],
+            merges: List[Tuple[bytes, bytes]],
+            special_tokens: Optional[List[str]] = None
     ):
         """
         Construct a tokenizer from a given vocabulary, list of merges, and (optionally) a list of special tokens.
@@ -26,7 +29,7 @@ class Tokenizer:
             cls,
             vocab_filepath: str,
             merges_filepath: str,
-            special_tokens: list[str] | None = None
+            special_tokens: Optional[List[str]] = None
     ):
         """
         Class method that constructs and return a Tokenizer from a serialized vocabulary and list of merges
@@ -47,7 +50,7 @@ class Tokenizer:
 
         return cls(vocab, merges, special_tokens)
 
-    def encode(self, text: str) -> list[int]:
+    def encode(self, text: str) -> List[int]:
         """
         Encode an input text into a sequence of token IDs
         """
@@ -101,7 +104,7 @@ class Tokenizer:
             token_ids = self.encode(line)
             yield from token_ids
 
-    def decode(self, ids: list[int]) -> str:
+    def decode(self, ids: List[int]) -> str:
         """
         Decode a sequence of token IDs into text
         """

@@ -2,10 +2,11 @@ import os
 import argparse
 import torch
 import numpy as np
-import cs336_basics.pre_norm_transformer_block as pre_norm_transformer_block
-import cs336_basics.optim as optim
-import cs336_basics.dataloader as dataloader
-import cs336_basics.tokenizer as tokenizer
+import pre_norm_transformer_block
+import optim
+import dataloader
+import tokenizer
+
 
 def main():
     parser = argparse.ArgumentParser()

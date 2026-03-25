@@ -1,4 +1,5 @@
 import math
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -9,8 +10,8 @@ class Linear(nn.Module):
             self,
             in_features: int,                     # final dimension of the input
             out_features: int,                    # final dimension of the output
-            device: torch.device | None = None,   # Device to store the parameters on
-            dtype: torch.dtype | None = None      # Data type of the parameters
+            device: Optional[torch.device] = None,   # Device to store the parameters on
+            dtype: Optional[torch.dtype] = None      # Data type of the parameters
     ):
         """
         Construct a linear transformation module.
@@ -32,8 +33,8 @@ class Embedding(nn.Module):
             self,
             num_embeddings: int,                  # Size of the vocabulary
             embedding_dim: int,                   # Dimension of the embedding vectors, i.e., d_model
-            device: torch.device | None = None,   # Device to store the parameters on
-            dtype: torch.dtype | None = None      # Data type of the parameters
+            device: Optional[torch.device] = None,   # Device to store the parameters on
+            dtype: Optional[torch.dtype] = None      # Data type of the parameters
     ):
         """
         Construct an embedding module.

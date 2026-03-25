@@ -1,10 +1,10 @@
 import json
 import numpy as np
-import cs336_basics.tokenizer as tokenizer
-import cs336_basics.bpe as bpe
+import tokenizer as tokenizer
+import bpe
 
 if __name__ == '__main__':
-    path = "../datasets/tinystories_sample_"
+    path = "../datasets/TinyStoriesV2-GPT4-"
     vocab_size = 10000
 
     special_tokens = ["<|endoftext|>"]
