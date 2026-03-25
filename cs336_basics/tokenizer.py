@@ -1,9 +1,13 @@
-from __future__ import annotations
 from collections.abc import Iterable, Iterator
 import json
 from typing import Optional, List, Dict, Tuple
 
 import regex as re
+import cs336_basics.utils as utils
+
+
+byte_encoder = utils.bytes_to_unicode()
+byte_decoder = {v: k for k, v in byte_encoder.items()}
 
 
 class Tokenizer:
@@ -35,18 +39,27 @@ class Tokenizer:
         Class method that constructs and return a Tokenizer from a serialized vocabulary and list of merges
         (in the same format that your BPE training code output) and (optionally) a list of special tokens
         """
-        with open(vocab_filepath, 'rb') as f:
-            raw_vocab = json.load(f)
-            vocab = {int(v): k.encode('utf-8') for k, v in raw_vocab.items()}
+        # 1. 加载 JSON
+        with open(vocab_filepath, 'r', encoding='utf-8') as f:
+            vocab_json = json.load(f)
 
+        # 2. 核心还原：将映射字符串还原为 bytes
+        vocab = {}
+        for safe_str, idx in vocab_json.items():
+            # 根据映射表变回真正的字节，比如 "Ġ" 变回 b' '
+            original_bytes = bytes([byte_decoder[c] for c in safe_str])
+            vocab[idx] = original_bytes
+
+        # 3. 处理 Merges
         merges = []
-        with open(merges_filepath, 'r') as f:
+        with open(merges_filepath, 'r', encoding='utf-8') as f:
             for line in f:
-                line = line.strip()
-                parts = line.split()
-                if len(parts) == 2:
-                    t1, t2 = parts[0].encode('utf-8'), parts[1].encode('utf-8')
-                    merges.append((t1, t2))
+                parts = line.strip().split(' ')
+                if len(parts) != 2: continue
+                # 同样还原字节对
+                p1 = bytes([byte_decoder[c] for c in parts[0]])
+                p2 = bytes([byte_decoder[c] for c in parts[1]])
+                merges.append((p1, p2))
 
         return cls(vocab, merges, special_tokens)
 
@@ -108,5 +121,10 @@ class Tokenizer:
         """
         Decode a sequence of token IDs into text
         """
-        full_bytes = b''.join([self.vocab[id] for id in ids])
-        return full_bytes.decode('utf-8', errors="replace")
+        # 1. 直接拼接原始字节流
+        # self.id_to_byte 是 byte_to_id 的反向映射
+        full_bytes = b"".join([self.vocab[i] for i in ids])
+
+        # 2. 整体解码一次
+        # 如果此时还有非法字节（极罕见），errors='replace' 才作为最后的防线
+        return full_bytes.decode('utf-8', errors='replace')

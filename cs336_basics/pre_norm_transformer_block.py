@@ -4,7 +4,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-import basic_building_blocks
+import cs336_basics.basic_building_blocks as basic_building_blocks
 
 
 class RMSNorm(nn.Module):

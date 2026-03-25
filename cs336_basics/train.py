@@ -11,7 +11,7 @@ import tokenizer
 def main():
     parser = argparse.ArgumentParser()
     # 模型超参数
-    parser.add_argument("--vocab_size", type=int, default=10000)
+    parser.add_argument("--vocab_size", type=int, default=20000)
     parser.add_argument("--context_length", type=int, default=256)
     parser.add_argument("--d_model", type=int, default=512)
     parser.add_argument("--d_ff", type=int, default=1344)

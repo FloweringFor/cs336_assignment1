@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import regex as re
 from collections import Counter
@@ -12,10 +10,10 @@ def train_bpe(
         vocab_size: int,
         special_tokens: List[str],
 ) -> Tuple[Dict[int, bytes], List[Tuple[bytes, bytes]]]:
-    # 第一阶段：初始化词表（Vocabulary Initialization）
+    # 第一阶段：初始化词表
     vocab = initialize_vocab(special_tokens)
 
-    # 第二阶段：并行预分词与计数（Pre-tokenization）
+    # 第二阶段：并行预分词与计数 (保持原样，这部分逻辑是稳的)
     with open(input_path, 'rb') as f:
         num_chunks = mp.cpu_count()
         boundaries = find_chunk_boundaries(f, num_chunks, b'<|endoftext|>')
@@ -29,13 +27,12 @@ def train_bpe(
     for c in chunk_counters:
         word_counts.update(c)
 
-    # 第三阶段：循环合并（The Merge Loop）
+    # 第三阶段：循环合并
     merge = []
-    # word_counts = {(b'l', b'o', b'w'): 5, (b'n', b'e', b'w'): 2}
-    # 1. 初始化 stat (仅一次)
     stat = Counter()
-    # 2. 建立 pair -> words 的反向索引
     pair_to_words = {}
+
+    # 1. 初始建立索引
     for word, count in word_counts.items():
         for i in range(len(word) - 1):
             pair = (word[i], word[i + 1])
@@ -44,40 +41,62 @@ def train_bpe(
                 pair_to_words[pair] = set()
             pair_to_words[pair].add(word)
 
+    # 使用 current_vocab_size 确保 ID 分配严格连续且不越界
     while len(vocab) < vocab_size:
-        if not stat:
+        # 过滤掉 count <= 0 的项，防止由于逻辑残留导致的错误合并
+        actual_stats = {k: v for k, v in stat.items() if v > 0}
+        if not actual_stats:
             break
 
-        # A. 依然用 max 找 best_pair，但直接从 stat 找
-        best_pair = max(stat.items(), key=lambda x: (x[1], x[0]))[0]
+        # A. 找出现频率最高且字节序最小的 pair (满足作业要求的 tie-breaking)
+        best_pair = max(actual_stats.items(), key=lambda x: (x[1], x[0]))[0]
 
-        # B. 更新 vocab 和 merge
+        # B. 严格同步更新 vocab 和 merge
         new_token_bytes = best_pair[0] + best_pair[1]
         vocab[len(vocab)] = new_token_bytes
         merge.append(best_pair)
 
-        # C. 局部更新！只处理含有 best_pair 的单词
-        # 我们只拿走受影响的单词
-        target_words = pair_to_words.get(best_pair, set())
-        for old_word in list(target_words):
+        # C. 【核心修复】局部更新：确保受影响单词的所有 pair 引用都被刷新
+        target_words = list(pair_to_words.get(best_pair, set()))
+
+        # 必须先把这个 best_pair 的索引彻底清空，因为它即将被合并掉
+        if best_pair in pair_to_words:
+            del pair_to_words[best_pair]
+        if best_pair in stat:
+            del stat[best_pair]
+
+        for old_word in target_words:
+            if old_word not in word_counts:
+                continue
+
             count = word_counts[old_word]
+
+            # 1. 彻底清除旧词在所有相关 pair 中的计数和索引
             for i in range(len(old_word) - 1):
                 p = (old_word[i], old_word[i + 1])
-                stat[p] -= count
-                pair_to_words[p].discard(old_word)
+                if p in stat:
+                    stat[p] -= count
+                    if stat[p] <= 0:
+                        del stat[p]
+                if p in pair_to_words:
+                    pair_to_words[p].discard(old_word)
 
+            # 2. 生成新词 (合并逻辑)
             new_word = []
             i = 0
             while i < len(old_word):
-                if i < len(old_word) - 1 and best_pair[0] == old_word[i] and best_pair[1] == old_word[i + 1]:
+                if i < len(old_word) - 1 and (old_word[i], old_word[i + 1]) == best_pair:
                     new_word.append(new_token_bytes)
                     i += 2
                 else:
                     new_word.append(old_word[i])
                     i += 1
             new_word = tuple(new_word)
-            word_counts[new_word] = count
+
+            # 3. 将新词重新加入 word_counts、stat 和索引
+            # 注意：新词可能已经存在于 word_counts 中，所以要累加 count
             del word_counts[old_word]
+            word_counts[new_word] = word_counts.get(new_word, 0) + count
 
             for i in range(len(new_word) - 1):
                 p = (new_word[i], new_word[i + 1])
@@ -85,8 +104,7 @@ def train_bpe(
                 if p not in pair_to_words:
                     pair_to_words[p] = set()
                 pair_to_words[p].add(new_word)
-        if best_pair in stat:
-            del stat[best_pair]
+
     return vocab, merge
 
 
