@@ -55,7 +55,7 @@ class SwiGLU(nn.Module):
     def forward(self, x):
         w1x = self.w1(x)
         w3x = self.w3(x)
-        return self.w2(w1x * torch.sigmoid(w1x) * w3x)
+        return self.w2(silu(w1x) * w3x)
 
 
 class RoPE(nn.Module):
@@ -100,6 +100,10 @@ class RoPE(nn.Module):
         cos = cos.unsqueeze(-3)  # (Batch, 1, Seq_Len, d_k)
         sin = sin.unsqueeze(-3)  # (Batch, 1, Seq_Len, d_k)
         return x * cos + self._rotate_half(x) * sin
+
+
+def silu(x):
+    return x * torch.sigmoid(x)
 
 
 def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
