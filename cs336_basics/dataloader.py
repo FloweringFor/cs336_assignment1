@@ -8,26 +8,21 @@ import numpy.typing as npt
 
 
 def data_loading(dataset: npt.NDArray, batch_size: int, context_length: int, device: str):
-    # 1. 将 numpy 转换为 torch tensor 并移至对应设备
-    data = torch.from_numpy(dataset.astype(np.int64)).to(device)
-    n = len(data)
+    """
+        极简、高效的随机采样 DataLoader
+        """
+    # 随机产生 batch_size 个起始位置
+    # 注意：在 numpy 层面做随机索引，不要先把整个数据集转成 tensor
+    n = len(dataset)
+    ix = np.random.randint(0, n - context_length - 1, (batch_size,))
 
-    # 2. 计算所有可能的起始位置
-    # 每个样本需要 context_length 个输入 + 1 个目标值
-    max_start_idx = n - context_length - 1
-    start_indices = np.arange(max_start_idx + 1)
+    # 提取数据并转换为 Tensor
+    # 这里用 list comprehension 配合 torch.from_numpy 是最快的
+    x = torch.stack([torch.from_numpy(dataset[i: i + context_length].astype(np.int64)) for i in ix])
+    y = torch.stack([torch.from_numpy(dataset[i + 1: i + 1 + context_length].astype(np.int64)) for i in ix])
 
-    # 3. 打乱索引（训练时通常需要）
-    np.random.shuffle(start_indices)
-
-    # 4. 按 batch_size 循环处理
-    for i in range(0, len(start_indices), batch_size):
-        if i + batch_size < len(start_indices):
-            batch_start_steps = start_indices[i: i + batch_size]
-            x_batch = torch.stack([data[idx: idx + context_length] for idx in batch_start_steps])
-            y_batch = torch.stack([data[idx + 1: idx + context_length + 1] for idx in batch_start_steps])
-
-            yield x_batch, y_batch
+    # 最后统一移动到设备
+    return x.to(device), y.to(device)
 
 
 def save_checkpoint(

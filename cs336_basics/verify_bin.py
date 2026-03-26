@@ -3,7 +3,7 @@ import random
 from cs336_basics.tokenizer import Tokenizer
 
 
-def verify_data(bin_path, vocab_json, merges_txt, special_tokens, sample_size=100):
+def verify_data(bin_path, vocab_json, merges_txt, special_tokens, sample_size=300):
     # 1. 加载你那套经过 GPT-2 映射加固的 Tokenizer
     print(f"正在加载 Tokenizer...")
     tokenizer = Tokenizer.from_files(vocab_json, merges_txt, special_tokens)
@@ -36,7 +36,7 @@ def verify_data(bin_path, vocab_json, merges_txt, special_tokens, sample_size=10
 
 if __name__ == "__main__":
     # 请根据你的实际路径修改
-    PATH = "../datasets/TinyStoriesV2-GPT4-"
+    PATH = "/root/autodl-tmp/cs336_assignment1/datasets/TinyStoriesV2-GPT4-"
     verify_data(
         bin_path=f"{PATH}valid.bin",
         vocab_json=f"{PATH}vocab.json",

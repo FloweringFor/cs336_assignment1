@@ -487,8 +487,7 @@ def run_get_batch(
         language modeling labels.
     """
 
-    data_loader = dataloader.data_loading(dataset, batch_size, context_length, device)
-    return next(data_loader)
+    return dataloader.data_loading(dataset, batch_size, context_length, device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:

@@ -11,32 +11,36 @@ import tokenizer
 def main():
     parser = argparse.ArgumentParser()
     # 模型超参数
-    parser.add_argument("--vocab_size", type=int, default=20000)
+    parser.add_argument("--vocab_size", type=int, default=10000)
     parser.add_argument("--context_length", type=int, default=256)
     parser.add_argument("--d_model", type=int, default=512)
     parser.add_argument("--d_ff", type=int, default=1344)
     parser.add_argument("--rope_theta", type=float, default=10000.0)
-    parser.add_argument("--num_layers", type=int, default=4)
-    parser.add_argument("--num_heads", type=int, default=16)
+    parser.add_argument("--num_layers", type=int, default=8)
+    parser.add_argument("--num_heads", type=int, default=8)
     # 训练超参数
     parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--max_iters", type=int, default=10000)
-    parser.add_argument("--eval_iters", type=int, default=100)
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--max_iters", type=int, default=150000)
+    parser.add_argument("--eval_iters", type=int, default=1000)
     parser.add_argument("--save_iters", type=int, default=1000)
     parser.add_argument("--max_l2_norm", type=float, default=1.0)
-    parser.add_argument("--eval_batch", type=int, default=10)
+    parser.add_argument("--eval_batch", type=int, default=100)
     # 预测超参数
-    parser.add_argument("--temperature", type=float, default=1.0)
-    parser.add_argument("--top_p", type=float, default=1.0)
-    parser.add_argument("--text", type=str, required=True)
-    parser.add_argument("--max_new_tokens", type=int, default=1024)
+    parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--top_p", type=float, default=0.8)
+    parser.add_argument("--text", type=str, default="Can you tell me a fairy tale?")
+    parser.add_argument("--max_new_tokens", type=int, default=256)
     # 路径
-    parser.add_argument("--train_path", type=str, required=True)
-    parser.add_argument("--valid_path", type=str, required=True)
-    parser.add_argument("--vocab_path", type=str, required=True)
-    parser.add_argument("--merges_path", type=str, required=True)
-    parser.add_argument("--save_path", type=str, default="checkpoints")
+    parser.add_argument("--train_path", type=str,
+                        default="/root/autodl-tmp/cs336_assignment1/datasets/TinyStoriesV2-GPT4-train.bin")
+    parser.add_argument("--valid_path", type=str,
+                        default="/root/autodl-tmp/cs336_assignment1/datasets/TinyStoriesV2-GPT4-valid.bin")
+    parser.add_argument("--vocab_path", type=str,
+                        default="/root/autodl-tmp/cs336_assignment1/datasets/TinyStoriesV2-GPT4-vocab.json")
+    parser.add_argument("--merges_path", type=str,
+                        default="/root/autodl-tmp/cs336_assignment1/datasets/TinyStoriesV2-GPT4-merges.txt")
+    parser.add_argument("--save_path", type=str, default="/root/autodl-tmp/cs336_assignment1/checkpoints")
     args = parser.parse_args()
 
     if not os.path.exists(args.save_path):
@@ -46,8 +50,10 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 核心：使用 np.memmap 加载大数据集 (Memory-efficient)
-    train_data = np.memmap(args.train_path, dtype=np.uint16, mode='r')
-    valid_data = np.memmap(args.valid_path, dtype=np.uint16, mode='r')
+    # train_data = np.memmap(args.train_path, dtype=np.uint16, mode='r')
+    # valid_data = np.memmap(args.valid_path, dtype=np.uint16, mode='r')
+    train_data = np.fromfile(args.train_path, dtype=np.uint16)
+    valid_data = np.fromfile(args.valid_path, dtype=np.uint16)
 
     special_tokens = ["<|endoftext|>"]
     tok = tokenizer.Tokenizer.from_files(args.vocab_path, args.merges_path, special_tokens)
@@ -63,19 +69,32 @@ def main():
         rope_theta=args.rope_theta
     ).to(device)
 
+    # 参数对齐
+    alpha_max = args.lr  # 1e-3
+    alpha_min = args.lr * 0.1  # 通常降到最大值的 10%
+    t_w = 2000  # Warmup 步数
+    t_c = args.max_iters  # 整个 Cosine 退火结束的步数
+
     # 初始化优化器
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr)
+    optimizer = optim.AdamW(model.parameters(), lr=alpha_max)
 
     # 启动训练循环
-    train_loop(model, optimizer, train_data, valid_data, args, device, tok)
+    train_loop(model, optimizer, train_data, valid_data, args, device, tok, alpha_max, alpha_min, t_w, t_c)
 
 
-def train_loop(model, optimizer, train_data, valid_data, args, device, tok):
+def train_loop(model, optimizer, train_data, valid_data, args, device, tok, alpha_max, alpha_min, t_w, t_c):
     best_loss = float('inf')
     model.train()
     running_loss = 0
     text_idx = torch.tensor([tok.encode(args.text)], dtype=torch.long, device=device)
     for iter in range(args.max_iters):
+
+        # --- 关键步骤：更新学习率 ---
+        current_lr = optim.learning_rate_schedule(iter, alpha_max, alpha_min, t_w, t_c)
+        # 将计算出的 lr 应用到优化器中
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = current_lr
+
         # 1. 获取数据
         xb, yb = dataloader.data_loading(train_data, args.batch_size, args.context_length, device)
         # 2.1 前向传播
@@ -91,7 +110,8 @@ def train_loop(model, optimizer, train_data, valid_data, args, device, tok):
         # 4. 打印日志与验证
         if iter % args.eval_iters == 0 and iter > 0:
             val_loss = estimate_loss(model, valid_data, args, device)
-            print(f"Iter {iter}: avg train loss {running_loss / args.eval_iters:.4f}, val loss {val_loss:.4f}")
+            print(f"Iter {iter}: avg train loss {running_loss / args.eval_iters:.4f}, "
+                  f"val loss {val_loss:.4f}, current lr {current_lr:.2e}")
             running_loss = 0
 
             if val_loss < best_loss:
