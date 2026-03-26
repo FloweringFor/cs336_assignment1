@@ -21,7 +21,7 @@ def main():
     # 训练超参数
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--max_iters", type=int, default=150000)
+    parser.add_argument("--max_iters", type=int, default=50000)
     parser.add_argument("--eval_iters", type=int, default=1000)
     parser.add_argument("--save_iters", type=int, default=1000)
     parser.add_argument("--max_l2_norm", type=float, default=1.0)
@@ -41,6 +41,9 @@ def main():
     parser.add_argument("--merges_path", type=str,
                         default="/root/autodl-tmp/cs336_assignment1/datasets/TinyStoriesV2-GPT4-merges.txt")
     parser.add_argument("--save_path", type=str, default="/root/autodl-tmp/cs336_assignment1/checkpoints")
+
+    parser.add_argument("--load_model", type=bool, default=True)
+
     args = parser.parse_args()
 
     if not os.path.exists(args.save_path):
@@ -69,6 +72,7 @@ def main():
         rope_theta=args.rope_theta
     ).to(device)
 
+
     # 参数对齐
     alpha_max = args.lr  # 1e-3
     alpha_min = args.lr * 0.1  # 通常降到最大值的 10%
@@ -78,16 +82,23 @@ def main():
     # 初始化优化器
     optimizer = optim.AdamW(model.parameters(), lr=alpha_max)
 
+    start_iter = 0
+    if args.load_model and os.path.exists(f"{args.save_path}/ckpt_best.pt"):
+        checkpoint = f"{args.save_path}/ckpt_best.pt"
+        start_iter = dataloader.load_checkpoint(checkpoint, model, optimizer)
+    else:
+        print("未发现 checkpoint 或未开启加载模式，将从头开始训练。")
+
     # 启动训练循环
-    train_loop(model, optimizer, train_data, valid_data, args, device, tok, alpha_max, alpha_min, t_w, t_c)
+    train_loop(model, optimizer, train_data, valid_data, start_iter, args, device, tok, alpha_max, alpha_min, t_w, t_c)
 
 
-def train_loop(model, optimizer, train_data, valid_data, args, device, tok, alpha_max, alpha_min, t_w, t_c):
+def train_loop(model, optimizer, train_data, valid_data, start_iter, args, device, tok, alpha_max, alpha_min, t_w, t_c):
     best_loss = float('inf')
     model.train()
     running_loss = 0
     text_idx = torch.tensor([tok.encode(args.text)], dtype=torch.long, device=device)
-    for iter in range(args.max_iters):
+    for iter in range(start_iter, args.max_iters):
 
         # --- 关键步骤：更新学习率 ---
         current_lr = optim.learning_rate_schedule(iter, alpha_max, alpha_min, t_w, t_c)
