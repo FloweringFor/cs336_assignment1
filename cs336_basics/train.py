@@ -21,7 +21,7 @@ def main():
     # 训练超参数
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--max_iters", type=int, default=50000)
+    parser.add_argument("--max_iters", type=int, default=100000)
     parser.add_argument("--eval_iters", type=int, default=1000)
     parser.add_argument("--save_iters", type=int, default=1000)
     parser.add_argument("--max_l2_norm", type=float, default=1.0)
