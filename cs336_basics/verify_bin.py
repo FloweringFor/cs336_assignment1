@@ -36,9 +36,9 @@ def verify_data(bin_path, vocab_json, merges_txt, special_tokens, sample_size=30
 
 if __name__ == "__main__":
     # 请根据你的实际路径修改
-    PATH = "/root/autodl-tmp/cs336_assignment1/datasets/TinyStoriesV2-GPT4-"
+    PATH = "/root/autodl-tmp/cs336_assignment1/datasets/owt_"
     verify_data(
-        bin_path=f"{PATH}valid.bin",
+        bin_path=f"{PATH}train.bin",
         vocab_json=f"{PATH}vocab.json",
         merges_txt=f"{PATH}merges.txt",
         special_tokens=["<|endoftext|>"]

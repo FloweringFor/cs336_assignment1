@@ -39,81 +39,67 @@ def worker_func(doc_text):
 
 # --- 2. 修改后的 process_split (增加 tqdm 进度条) ---
 def process_split(split_name, input_path, output_path, vocab_path, merges_path, special_tokens, num_proc):
-    print(f"正在处理 {split_name} 数据...")
+    print(f"🚀 正在并行分词: {split_name}")
     init_params = (vocab_path, merges_path, special_tokens)
 
-    def chunk_generator(file_path, delimiter='<|endoftext|>', batch_size=1000):
-        """流式读取大文件，按 <|endoftext|> 分割文档"""
+    file_size = os.path.getsize(input_path)
+
+    # 1. 优化后的流式生成器
+    def doc_generator(file_path, pbar, delimiter='<|endoftext|>'):
         with open(file_path, 'r', encoding='utf-8') as f:
             buffer = ""
-            batch = []
             while True:
-                # 每次读 4MB，防止 GB 级文件撑爆内存
-                chunk = f.read(4 * 1024 * 1024)
+                chunk = f.read(4 * 1024 * 1024)  # 4MB 缓冲区
                 if not chunk:
-                    if buffer.strip():
-                        batch.append(buffer.strip())
-                    if batch:
-                        yield batch
+                    if buffer.strip(): yield buffer.strip()
                     break
+
+                # 更新进度条：读取了多少字节
+                pbar.update(len(chunk.encode('utf-8')))
 
                 buffer += chunk
                 while delimiter in buffer:
                     doc, buffer = buffer.split(delimiter, 1)
                     if doc.strip():
-                        batch.append(doc.strip())
-                    if len(batch) >= batch_size:
-                        yield batch
-                        batch = []
+                        yield doc.strip()
 
-    all_ids = []
+    # 2. 使用 tqdm 监控文件读取进度 (unit='B' 表示字节)
+    with tqdm(total=file_size, unit='B', unit_scale=True, desc=f"Reading {split_name}") as pbar:
+        with open(output_path, 'wb') as f_out:
+            with mp.Pool(num_proc, initializer=init_worker, initargs=(init_params,)) as pool:
+                # imap 配合 chunksize=100 保持 20 核满载
+                results = pool.imap(worker_func, doc_generator(input_path, pbar), chunksize=100)
 
-    # 估计文件大小用于显示进度（可选）
-    file_size = os.path.getsize(input_path)
+                chunk_ids = []
+                total_tokens = 0
 
-    with mp.Pool(num_proc, initializer=init_worker, initargs=(init_params,)) as pool:
-        # 使用生成器配合 imap
-        # batch_size 设为 1000 左右比较平衡
-        for batch in chunk_generator(input_path, batch_size=1000):
-            # chunksize=20 让每个进程一次处理 20 个文档，减少 IPC 通信开销
-            results = pool.imap(worker_func, batch, chunksize=20)
-            for res in results:
-                all_ids.extend(res)
+                for res in results:
+                    if not res: continue
+                    chunk_ids.extend(res)
 
-    print(f"正在转换 {split_name} 为 Numpy 并写入...")
-    ids_array = np.array(all_ids, dtype=np.uint16)
-    ids_array.tofile(output_path)
-    print(f"{split_name} 处理完毕。")
+                    # 每积攒 1M tokens (约 2MB uint16) 立即落盘，防止内存膨胀
+                    if len(chunk_ids) >= 1_000_000:
+                        np.array(chunk_ids, dtype=np.uint16).tofile(f_out)
+                        total_tokens += len(chunk_ids)
+                        chunk_ids = []
+
+                # 写入末尾残余
+                if chunk_ids:
+                    np.array(chunk_ids, dtype=np.uint16).tofile(f_out)
+                    total_tokens += len(chunk_ids)
+
+    print(f"\n✅ {split_name} 处理完成！")
+    print(f"📊 总计生成 Tokens: {total_tokens / 1e6:.2f} M")
+    print(f"💾 输出文件路径: {output_path}")
 
 
 if __name__ == '__main__':
     byte_encoder = utils.bytes_to_unicode()
 
-    path = "/root/autodl-tmp/cs336_assignment1/datasets/TinyStoriesV2-GPT4-"
+    path = "/root/autodl-tmp/cs336_assignment1/datasets/owt_"
     special_tokens = ["<|endoftext|>"]
 
-    vocab_size = 10000
-
-    vocab, merges = bpe.train_bpe(f'{path}train.txt', vocab_size, special_tokens)
-
-    # vocab {int: bytes}
-    # 注意：这里不再使用 errors='replace'，因为映射表保证了安全
-    vocab_to_json = {}
-    for idx, token_bytes in vocab.items():
-        # 将 b"don'" 转换成类似 "don'" 的映射字符串
-        safe_str = "".join(byte_encoder[b] for b in token_bytes)
-        vocab_to_json[safe_str] = idx
-
-    # 写入 JSON
-    with open(f'{path}vocab.json', 'w', encoding='utf-8') as f:
-        json.dump(vocab_to_json, f, indent=4, ensure_ascii=False)
-
-    # 写入 Merges
-    with open(f'{path}merges.txt', 'w', encoding='utf-8') as f:
-        for p1, p2 in merges:
-            s1 = "".join(byte_encoder[b] for b in p1)
-            s2 = "".join(byte_encoder[b] for b in p2)
-            f.write(f"{s1} {s2}\n")
+    vocab_size = 50257
 
     num_cpus = mp.cpu_count()
     vocab_p = f"{path}vocab.json"
@@ -135,3 +121,26 @@ if __name__ == '__main__':
             )
         else:
             print(f"警告: 找不到输入文件 {in_p}")
+
+"""
+    vocab, merges = bpe.train_bpe(f'{path}train.txt', vocab_size, special_tokens)
+
+    # vocab {int: bytes}
+    # 注意：这里不再使用 errors='replace'，因为映射表保证了安全
+    vocab_to_json = {}
+    for idx, token_bytes in vocab.items():
+        # 将 b"don'" 转换成类似 "don'" 的映射字符串
+        safe_str = "".join(byte_encoder[b] for b in token_bytes)
+        vocab_to_json[safe_str] = idx
+
+    # 写入 JSON
+    with open(f'{path}vocab.json', 'w', encoding='utf-8') as f:
+        json.dump(vocab_to_json, f, indent=4, ensure_ascii=False)
+
+    # 写入 Merges
+    with open(f'{path}merges.txt', 'w', encoding='utf-8') as f:
+        for p1, p2 in merges:
+            s1 = "".join(byte_encoder[b] for b in p1)
+            s2 = "".join(byte_encoder[b] for b in p2)
+            f.write(f"{s1} {s2}\n")
+"""
