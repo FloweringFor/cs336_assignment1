@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--top_p", type=float, default=0.8)
     parser.add_argument("--text", type=str,
                         default="The president told reporters at the White House that")
-    parser.add_argument("--max_new_tokens", type=int, default=512)
+    parser.add_argument("--max_new_tokens", type=int, default=300)
     # 路径
     parser.add_argument("--train_path", type=str,
                         default="/root/autodl-tmp/cs336_assignment1/datasets/owt_train.bin")
